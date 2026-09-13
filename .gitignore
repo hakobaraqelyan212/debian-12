@@ -1,0 +1,56 @@
+# ==================================================
+# Debian live-build generated directories
+# ==================================================
+.build/
+cache/
+chroot/
+binary/
+local/
+tmp/
+
+# ==================================================
+# Generated ISO images and metadata
+# ==================================================
+*.iso
+*.img
+*.raw
+*.zsync
+*.sha256
+*.sha512
+
+live-image-*
+chroot.files
+chroot.packages.*
+binary.modified_timestamps
+
+# ==================================================
+# Build logs
+# ==================================================
+build.log
+build-*.log
+*.build.log
+
+# ==================================================
+# Temporary and editor files
+# ==================================================
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ==================================================
+# Local secrets
+# ==================================================
+.env
+.env.*
+!.env.example
+secrets/
+*.secret
+
+# Actual generated preseed with password hashes
+config/includes.installer/preseed.cfg
+
+# Generated VNC password file, if created in config tree
+config/includes.chroot/etc/skel/.vnc/passwd
