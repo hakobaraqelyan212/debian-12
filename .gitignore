@@ -7,6 +7,7 @@ chroot/
 binary/
 local/
 tmp/
+images/
 
 # ==================================================
 # Generated ISO images and metadata

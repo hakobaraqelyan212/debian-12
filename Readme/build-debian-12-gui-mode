@@ -1,0 +1,223 @@
+Լավ, այսինքն Փուլ 1-ի installer-ը արդեն ճիշտ է աշխատում, պարզապես վերջում տեղադրում է միայն console system։ Հիմա Փուլ 2-ում ավելացնենք միայն Debian 12-ի սովորական default GNOME desktop-ը, ուրիշ ոչ մի customization չանենք։
+
+Debian Installer-ի default desktop-ը amd64-ի վրա GNOME-ն է, իսկ դրա համար հիմնական task-երը task-desktop և task-gnome-desktop են։
+
+Միացի՛ր նույն persistent container-ին՝
+
+docker start -ai debian12-iso-builder
+
+Հետո՝
+
+cd /build
+
+Նախ համոզվենք, որ Փուլ 1-ի zstd workaround-ը մնացել է.
+
+grep -n '^zstd$' profiles/default.downloads
+
+Պետք է վերադարձնի zstd։
+
+Հիմա ստեղծիր նոր profile՝
+
+mkdir -p profiles
+
+cat > profiles/desktop.packages <<'EOF'
+task-desktop
+task-gnome-desktop
+EOF
+
+Սա հենց Debian-ի սովորական desktop task-ն է։ task-gnome-desktop-ը նախատեսված է Debian Installer-ի GNOME desktop installation-ի համար։
+
+Որպեսզի profile-ը installer-ի ժամանակ ավտոմատ ընտրվի և դու լրացուցիչ profile ընտրելու հարց չստանաս, build-ը կանենք --profiles desktop --auto-profiles desktop-ով։ simple-cdd-ի documentation-ում --auto-profiles-ը հենց profile-ը ավտոմատ install անելու համար է։
+
+Քանի որ GNOME-ը շատ փաթեթներ է բերում, այս անգամ խորհուրդ եմ տալիս DVD image կառուցել՝
+
+rm -rf tmp images
+
+build-simple-cdd \
+  --force-root \
+  --dist bookworm \
+  --debian-mirror https://deb.debian.org/debian \
+  --security-mirror https://security.debian.org/debian-security \
+  --profiles desktop \
+  --auto-profiles desktop \
+  --dvd \
+  2>&1 | tee build-stage2-desktop.log
+
+Այս build-ը նախորդ 338 MB ISO-ից զգալիորեն մեծ կլինի, քանի որ GNOME-ի փաթեթները նույնպես կմտնեն installation media-ի մեջ։
+
+Build-ից հետո՝
+
+ls -lh /build/images/
+
+և գտիր ISO-ն՝
+
+find /build/images -maxdepth 1 -type f -name '*.iso' -ls
+
+Մինչև USB-ի վրա գրելը ստուգիր, որ GNOME task-երը իսկապես ISO-ի package list-ի մեջ են.
+
+zgrep -E 'task-desktop|task-gnome-desktop' \
+  /build/images/*.list.gz
+
+Պետք է տեսնես երկուսն էլ։
+
+Նաև ստուգիր GDM-ը և GNOME Shell-ը.
+
+zgrep -E 'gdm3|gnome-shell|gnome-session' \
+  /build/images/*.list.gz
+
+Եթե դրանք կան, ISO-ն ճիշտ է կառուցվել։
+
+Տեղադրումից հետո համակարգը պետք է boot անի արդեն graphical mode-ով՝
+
+Debian 12
+→ GDM login screen
+→ GNOME desktop
+
+Այս փուլում մենք հատուկ չենք փոխում ոչ hostname-ը, ոչ username-ը, ոչ ծրագրերի ցանկը, ոչ Wayland-ը, ոչ display manager-ը։ Ստանում ես Debian-ի սովորական default GNOME desktop-ը՝ Debian-ի default ծրագրերով և default կարգավորումներով։
+
+Եթե այս տարբերակը հաջող աշխատի, հաջորդ փուլում արդեն կարող ենք սկսել ավելորդ ծրագրերը հերթով հանել՝ առանց desktop-ի հիմնական մասերին դիպչելու։
+
+
+Սա արդեն նշանակում է, որ X/graphics-ը մեկնարկել է, որովհետև մկնիկի սլաքը երևում է, բայց GDM login screen-ը կամ GNOME Shell-ը չի բացվել։ Այս փուլում ISO-ն նորից մի build արա։ Նախ այս տեղադրված համակարգից հստակ գտնենք պատճառը, հետո միայն build config-ը կփոխենք։
+
+Սեղմիր՝
+
+Ctrl + Alt + F3
+
+Պետք է բացվի սև console։ Մուտք գործիր այն օգտատիրոջով, որը ստեղծել ես installation-ի ժամանակ։
+
+Հետո հերթով կատարիր՝
+
+systemctl get-default
+systemctl status gdm3 --no-pager -l
+systemctl status display-manager --no-pager -l
+dpkg -l | grep -E 'task-desktop|task-gnome-desktop|gdm3|gnome-shell|gnome-session|mutter'
+ls -la /usr/share/xsessions/
+ps aux | grep -E 'gdm|gnome-shell|gnome-session|Xorg|wayland' | grep -v grep
+
+Ամենակարևորը՝ log-ը.
+
+sudo journalctl -b -u gdm3 --no-pager -n 150
+
+և՝
+
+sudo journalctl -b \
+  | grep -Ei 'gdm|gnome-shell|gnome-session|mutter|Xorg|wayland|failed|error' \
+  | tail -n 150
+
+Այս հրամանների output-ը ուղարկիր ամբողջությամբ։
+
+Մինչ այդ կարող ես նաև մեկ անվտանգ փորձ անել։ Եթե gdm3-ը աշխատում է, restart արա՝
+
+sudo systemctl restart gdm3
+
+Հետո վերադարձիր graphical console՝ սովորաբար՝
+
+Ctrl + Alt + F1
+
+կամ
+
+Ctrl + Alt + F2
+
+Եթե նորից միայն մոխրագույն/սև background + mouse cursor է, վերադարձիր Ctrl+Alt+F3։
+
+Եթե systemctl status gdm3 ցույց տա, որ ծառայությունը չկա կամ failed է, դեռ ձեռքով package մի տեղադրիր։ Ինձ ուղարկիր արդյունքը, որովհետև ուզում ենք հենց ISO build-ի պատճառը ուղղել, ոչ թե միայն այս մեկ համակարգիչը ձեռքով վերանորոգել։
+
+Մի բան ևս ստուգենք, որովհետև սա շատ կարևոր է մեր simple-cdd build-ի համար։ Կատարիր՝
+
+dpkg -l | grep '^ii' | grep -E 'task-desktop|task-gnome-desktop'
+
+Եթե այստեղ task-gnome-desktop չկա, նշանակում է մեր desktop.packages profile-ը ISO-ի մեջ մտել է, բայց installation-ի ժամանակ չի install արվել։ Եթե կա, բայց gnome-shell/gdm3-ից որևէ մեկը բացակայում է, խնդիրը dependency/media կազմավորման մեջ է։
+
+Քո նկարի հիման վրա video driver-ի ամբողջական failure քիչ հավանական է, քանի որ graphical server-ը արդեն framebuffer է բացել և cursor-ն աշխատում է։ Ամենահավանականը GDM/GNOME session-ի incomplete installation կամ session startup failure է։
+
+Ուղարկիր հատկապես այս 4 հրամանների արդյունքները՝
+
+systemctl status gdm3 --no-pager -l
+dpkg -l | grep -E 'task-desktop|task-gnome-desktop|gdm3|gnome-shell|gnome-session|mutter'
+ls -la /usr/share/xsessions/
+sudo journalctl -b -u gdm3 --no-pager -n 150
+
+Դրանցից հետո կասեմ հենց Փուլ 2 build-ում ինչ մեկ փոփոխություն պետք է անենք, առանց հաջորդ փուլերի կարգավորումները խառնելու։
+
+
+Քո log-ից պատճառը արդեն բավական հստակ է․ GNOME-ը և GDM-ը տեղադրված ու աշխատող են, բայց GDM-ը login screen-ը փորձում է բացել Wayland-ով, իսկ այս համակարգչի շատ հին gma500 GPU-ի համար դա ճիշտ չի աշխատում։ Log-ում կա և՛ Running GNOME Shell ... as a Wayland display server, և՛ failed to open gma500 ..., հետո software fallback։
+
+Debian-ը թույլ է տալիս GDM-ին ստիպել X11/Xorg օգտագործել՝ /etc/gdm3/daemon.conf-ում WaylandEnable=false դնելով։
+
+Սկզբում նոր ISO մի build արա։ Այս տեղադրված համակարգում փորձարկենք։
+
+Մտիր root.
+
+su -
+
+Ստուգիր ներկայիս արժեքը՝
+
+grep -n 'WaylandEnable' /etc/gdm3/daemon.conf
+
+Հետո backup և փոփոխություն՝
+
+cp -a /etc/gdm3/daemon.conf \
+  /etc/gdm3/daemon.conf.bak
+
+sed -ri \
+  's/^[[:space:]#]*WaylandEnable=.*/WaylandEnable=false/' \
+  /etc/gdm3/daemon.conf
+
+Եթե grep-ով ընդհանրապես WaylandEnable չկար, օգտագործիր՝
+
+sed -i \
+  '/^\[daemon\]/a WaylandEnable=false' \
+  /etc/gdm3/daemon.conf
+
+Ստուգիր՝
+
+grep -n 'WaylandEnable' /etc/gdm3/daemon.conf
+
+Պետք է լինի՝
+
+WaylandEnable=false
+
+Հետո restart արա GDM-ը՝
+
+systemctl restart gdm3
+
+Եթե էկրանը մի քանի վայրկյան սևանա՝ նորմալ է։
+
+Եթե login screen-ը բացվի, login արա և հետո SSH-ից ստուգիր՝
+
+ps aux | grep -E 'gdm-x-session|Xorg|gdm-wayland-session|gnome-shell' \
+  | grep -v grep
+
+Ճիշտ դեպքում այլևս չպետք է տեսնես՝
+
+gdm-wayland-session
+
+իսկ պետք է տեսնես նման բան՝
+
+gdm-x-session
+/usr/lib/xorg/Xorg
+
+Այդ դեպքում խնդիրը հաստատված է՝ Wayland + GMA500 compatibility։
+
+Հետո reboot էլ փորձիր՝
+
+reboot
+
+և համոզվիր, որ reboot-ից հետո էլ GNOME login screen-ը նորմալ բացվում է։
+
+Եթե սա աշխատի, ապա քո Phase 2 ISO-ում desktop package-ները չենք փոխի։ Դրանք արդեն ճիշտ են.
+
+task-desktop
+task-gnome-desktop
+
+Պարզապես հաջորդ build-ում կավելացնենք միայն մեկ hardware-compatibility փոփոխություն՝ installation-ից հետո target համակարգի /etc/gdm3/daemon.conf-ում ավտոմատ գրել՝
+
+WaylandEnable=false
+
+Այսինքն Debian-ի մնացած GNOME desktop-ը կմնա լիովին default, պարզապես display backend-ը կլինի Xorg՝ որպեսզի այս հին GMA500 համակարգիչների վրա աշխատի։
+
+Մի կողմնակի բան էլ կա log-ում՝ Realtek-ի rtl8168e-3.fw firmware-ը բացակայում է, բայց դա այս սև desktop-ի պատճառը չէ։ Դա network firmware-ի առանձին փուլում կուղղենք։
+
+Հիմա արա միայն WaylandEnable=false + systemctl restart gdm3 և ասա՝ login screen-ը բացվե՞ց։
+
