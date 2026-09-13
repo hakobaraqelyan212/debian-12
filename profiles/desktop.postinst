@@ -1,0 +1,142 @@
+#!/bin/sh
+set -eu
+
+LOG="/var/log/haysell-install.log"
+
+exec >>"$LOG" 2>&1
+
+echo "======================================"
+echo "Haysell profile post-install"
+date
+echo "======================================"
+
+# --------------------------------------------------
+# 1. Force GDM/GNOME to use Xorg
+# --------------------------------------------------
+
+GDM_CONF="/etc/gdm3/daemon.conf"
+
+if [ -f "$GDM_CONF" ]; then
+    if grep -Eq '^[[:space:]#]*WaylandEnable=' "$GDM_CONF"; then
+        sed -ri \
+          's/^[[:space:]#]*WaylandEnable=.*/WaylandEnable=false/' \
+          "$GDM_CONF"
+    elif grep -q '^\[daemon\]' "$GDM_CONF"; then
+        sed -i \
+          '/^\[daemon\]/a WaylandEnable=false' \
+          "$GDM_CONF"
+    else
+        printf '\n[daemon]\nWaylandEnable=false\n' >> "$GDM_CONF"
+    fi
+fi
+
+echo "GDM Wayland setting:"
+grep -n 'WaylandEnable' "$GDM_CONF" || true
+
+
+# --------------------------------------------------
+# 2. Haysell repository
+# --------------------------------------------------
+
+. /etc/os-release
+
+echo \
+  "deb [trusted=yes] https://download.haysell.com/deb ${VERSION_CODENAME} main" \
+  > /etc/apt/sources.list.d/haysell.list
+
+cat /etc/apt/sources.list.d/haysell.list
+
+
+# --------------------------------------------------
+# 3. AnyDesk official repository
+# --------------------------------------------------
+
+install -m 0755 -d /etc/apt/keyrings
+
+curl -fsSL \
+  https://keys.anydesk.com/repos/DEB-GPG-KEY \
+  -o /etc/apt/keyrings/keys.anydesk.com.asc
+
+chmod a+r \
+  /etc/apt/keyrings/keys.anydesk.com.asc
+
+cat > /etc/apt/sources.list.d/anydesk-stable.list <<'ANYDESK'
+deb [signed-by=/etc/apt/keyrings/keys.anydesk.com.asc] https://deb.anydesk.com all main
+ANYDESK
+
+
+# --------------------------------------------------
+# 4. Update repositories
+# --------------------------------------------------
+
+apt-get update
+
+
+# --------------------------------------------------
+# 5. Install Haysell POS and AnyDesk
+# --------------------------------------------------
+
+DEBIAN_FRONTEND=noninteractive \
+apt-get install -y \
+  haysell-pos \
+  anydesk
+
+
+# --------------------------------------------------
+# 6. Make graphical mode default
+# --------------------------------------------------
+
+ln -sf \
+  /lib/systemd/system/graphical.target \
+  /etc/systemd/system/default.target
+
+systemctl enable NetworkManager.service 2>/dev/null || true
+systemctl enable ssh.service 2>/dev/null || true
+systemctl enable anydesk.service 2>/dev/null || true
+
+
+# --------------------------------------------------
+# 7. Haysell automatic startup after graphical login
+# --------------------------------------------------
+
+mkdir -p /etc/xdg/autostart
+
+cat > /etc/xdg/autostart/haysell-pos.desktop <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=Haysell POS
+Comment=Start Haysell POS automatically
+Exec=/usr/bin/env DISPLAY=:0 QT_QUICK_BACKEND=software /usr/bin/haysell-pos
+Terminal=false
+X-GNOME-Autostart-enabled=true
+OnlyShowIn=GNOME;
+DESKTOP
+
+chmod 644 /etc/xdg/autostart/haysell-pos.desktop
+
+
+# --------------------------------------------------
+# 8. Verification
+# --------------------------------------------------
+
+echo
+echo "Installed versions:"
+dpkg-query -W \
+  gdm3 \
+  sudo \
+  vim \
+  htop \
+  openssh-server \
+  x11vnc \
+  haysell-pos \
+  anydesk || true
+
+echo
+echo "Haysell executable:"
+command -v haysell-pos || true
+
+echo
+echo "Installation completed."
+date
+
+exit 0

@@ -1,2 +1,50 @@
-task-desktop
-task-gnome-desktop
+# GNOME desktop - minimal/default UI
+gdm3
+gnome-shell
+gnome-session
+gnome-settings-daemon
+gnome-control-center
+gnome-terminal
+nautilus
+gnome-keyring
+libpam-gnome-keyring
+gnome-backgrounds
+desktop-base
+adwaita-icon-theme
+fonts-cantarell
+xdg-user-dirs
+xdg-user-dirs-gtk
+dbus-user-session
+policykit-1
+accountsservice
+
+# Xorg
+xserver-xorg
+xserver-xorg-core
+xserver-xorg-input-all
+xserver-xorg-video-all
+x11-xserver-utils
+xauth
+
+# Network
+network-manager
+network-manager-gnome
+
+# Audio/runtime
+pipewire
+pipewire-pulse
+wireplumber
+rtkit
+
+# Requested admin tools
+sudo
+passwd
+vim
+htop
+openssh-server
+x11vnc
+
+# Needed for external repositories
+ca-certificates
+curl
+apt-transport-https
